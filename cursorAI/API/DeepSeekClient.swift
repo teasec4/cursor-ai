@@ -26,11 +26,13 @@ struct DeepSeekClient: DeepSeekClientProtocol {
             throw AppError.apiKeyMissing
         }
 
-        var request = URLRequest(url: settings.deepSeekEndpoint)
+        let provider = settings.selectedProvider
+
+        var request = URLRequest(url: provider.endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try encoder.encode(chatRequest(for: text))
+        request.httpBody = try encoder.encode(chatRequest(for: text, model: provider.model))
 
         let (data, response) = try await session.data(for: request)
 
@@ -56,15 +58,13 @@ struct DeepSeekClient: DeepSeekClientProtocol {
         )
     }
 
-    private func chatRequest(for text: String) -> DeepSeekChatRequest {
+    private func chatRequest(for text: String, model: String) -> DeepSeekChatRequest {
         DeepSeekChatRequest(
-            model: settings.deepSeekModel,
+            model: model,
             messages: [
                 DeepSeekMessage(
                     role: "system",
-                    content: """
-                    Correct grammar and spelling. Preserve the original meaning and language. Return only compact JSON with the key "corrected". No explanation. No Markdown.
-                    """
+                    content: settings.systemPrompt
                 ),
                 DeepSeekMessage(
                     role: "user",

@@ -3,9 +3,9 @@ import Foundation
 struct AppDependencies {
     let settings: AppSettings
     let clipboard: ClipboardServiceProtocol
+    let selectionCopy: SelectionCopyServicing
     let overlay: OverlayControlling
     let shortcut: GlobalShortcutServicing
-    let textReplacement: TextReplacementServicing
     let apiKeyStore: APIKeyStoring
     let deepSeek: DeepSeekClientProtocol
 
@@ -16,9 +16,9 @@ struct AppDependencies {
         return AppDependencies(
             settings: settings,
             clipboard: ClipboardService(),
+            selectionCopy: SelectionCopyService(),
             overlay: OverlayController(settings: settings),
             shortcut: GlobalShortcutService(),
-            textReplacement: TextReplacementService(),
             apiKeyStore: apiKeyStore,
             deepSeek: DeepSeekClient(settings: settings, apiKeyStore: apiKeyStore)
         )
@@ -31,9 +31,9 @@ struct AppDependencies {
         return AppDependencies(
             settings: settings,
             clipboard: PreviewClipboardService(),
+            selectionCopy: PreviewSelectionCopyService(),
             overlay: OverlayController(settings: settings),
             shortcut: GlobalShortcutService(),
-            textReplacement: TextReplacementService(),
             apiKeyStore: apiKeyStore,
             deepSeek: PreviewDeepSeekClient()
         )

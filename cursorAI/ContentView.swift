@@ -1,73 +1,79 @@
 import SwiftUI
 
 struct ContentView: View {
-    let dependencies: AppDependencies
-    @State var viewModel: GrammarAssistantViewModel
+    @Environment(\.openSettings) private var openSettings
+
+    let controller: AssistantController
+    @State private var isShowingHelp = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            header
+        VStack(alignment: .leading, spacing: 14) {
+            topBar
+            actionBar
+        }
+        .padding(18)
+        .frame(width: 360)
+        .sheet(isPresented: $isShowingHelp) {
+            HelpView()
+        }
+    }
 
-            GrammarAssistantView(viewModel: viewModel)
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("MVP status")
-                    .font(.headline)
-
-                Label("Clipboard reading is wired", systemImage: "checkmark.circle")
-                Label("Floating overlay is wired", systemImage: "checkmark.circle")
-                Label("Shortcut and replacement come next", systemImage: "clock")
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            Button {
+                controller.fixClipboardText()
+            } label: {
+                Label("Fix clipboard", systemImage: "text.badge.checkmark")
             }
-            .foregroundStyle(.secondary)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+
+            Spacer()
+
+            Button {
+                isShowingHelp = true
+            } label: {
+                Image(systemName: "questionmark.circle")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .help("How to use")
+
+            Button {
+                openSettings()
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .help("Settings")
+        }
+    }
+
+    private var actionBar: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Label(controller.dependencies.settings.correctionPersonality.title, systemImage: "person.text.rectangle")
+                    Label(controller.dependencies.settings.correctionStrength.title, systemImage: "slider.horizontal.3")
+                }
+                .lineLimit(1)
+
+                Text("⌃⌥Space fixes selection")
+                    .font(.callout.monospaced())
+                    .foregroundStyle(.secondary)
+            }
             .font(.callout)
-
-            HStack {
-                Button {
-                    showOverlay()
-                } label: {
-                    Label("Show Overlay", systemImage: "rectangle.on.rectangle")
-                }
-
-                Button {
-                    dependencies.overlay.hide()
-                } label: {
-                    Label("Hide", systemImage: "xmark.circle")
-                }
-            }
+            .foregroundStyle(.secondary)
         }
-        .padding(24)
-        .frame(width: 460)
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Cursor Assistant")
-                .font(.largeTitle.weight(.semibold))
-
-            Text("A small macOS assistant for grammar correction near the cursor.")
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func showOverlay() {
-        dependencies.overlay.show(
-            content: AnyView(
-                GrammarAssistantView(viewModel: viewModel)
-                    .padding(16)
-                    .frame(width: 420)
-                    .frame(maxHeight: 360)
-            )
-        )
+        .padding(.horizontal, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 #Preview {
     let dependencies = AppDependencies.preview()
+    let controller = AssistantController(dependencies: dependencies)
 
-    ContentView(
-        dependencies: dependencies,
-        viewModel: GrammarAssistantViewModel(dependencies: dependencies)
-    )
+    ContentView(controller: controller)
 }

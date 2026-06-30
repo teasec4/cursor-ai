@@ -2,26 +2,42 @@ import SwiftUI
 
 struct GrammarAssistantView: View {
     @Bindable var viewModel: GrammarAssistantViewModel
+    var showsManualControls = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             stateContent
 
+            if let message = viewModel.lastMessage {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             HStack(spacing: 10) {
-                Button {
-                    viewModel.loadClipboardText()
-                } label: {
-                    Label("Load Clipboard", systemImage: "doc.on.clipboard")
+                if showsManualControls {
+                    Button {
+                        viewModel.loadClipboardText()
+                    } label: {
+                        Label("Load", systemImage: "doc.on.clipboard")
+                    }
+
+                    Button {
+                        Task {
+                            await viewModel.correctLoadedText()
+                        }
+                    } label: {
+                        Label("Correct", systemImage: "text.badge.checkmark")
+                    }
+                    .disabled(!canCorrect)
                 }
 
                 Button {
-                    Task {
-                        await viewModel.correctLoadedText()
-                    }
+                    viewModel.copyCorrectedText()
                 } label: {
-                    Label("Correct", systemImage: "text.badge.checkmark")
+                    Label("Copy", systemImage: "doc.on.doc")
                 }
-                .disabled(!canCorrect)
+                .disabled(!hasResult)
 
                 Spacer()
 
@@ -39,7 +55,7 @@ struct GrammarAssistantView: View {
     private var stateContent: some View {
         switch viewModel.state {
         case .idle:
-            Text("Copy text, then load it here. DeepSeek wiring starts in a later phase.")
+            Text("Select text and press the shortcut.")
                 .foregroundStyle(.secondary)
         case let .loadedClipboard(text):
             TextPreview(title: "Clipboard text", text: text)
@@ -60,6 +76,14 @@ struct GrammarAssistantView: View {
 
     private var canCorrect: Bool {
         if case .loadedClipboard = viewModel.state {
+            return true
+        }
+
+        return false
+    }
+
+    private var hasResult: Bool {
+        if case .result = viewModel.state {
             return true
         }
 

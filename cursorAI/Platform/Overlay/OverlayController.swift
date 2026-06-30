@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 protocol OverlayControlling {
     func show(content: AnyView)
+    func refreshFrame()
     func hide()
 }
 
@@ -37,6 +38,17 @@ final class OverlayController: OverlayControlling {
 
         self.panel = panel
         scheduleAutoHide()
+    }
+
+    func refreshFrame() {
+        guard let panel else {
+            return
+        }
+
+        Task { @MainActor in
+            await Task.yield()
+            panel.setFrame(positionedFrame(for: panel), display: true, animate: true)
+        }
     }
 
     func hide() {
