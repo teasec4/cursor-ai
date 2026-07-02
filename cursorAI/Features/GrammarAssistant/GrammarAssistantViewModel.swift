@@ -69,7 +69,7 @@ final class GrammarAssistantViewModel {
         state = .correcting(text)
 
         do {
-            let result = try await dependencies.deepSeek.correctGrammar(text: text)
+            let result = try await dependencies.textCorrectionClient.correctGrammar(text: text)
             lastResult = result
             state = .result(result)
             lastMessage = nil

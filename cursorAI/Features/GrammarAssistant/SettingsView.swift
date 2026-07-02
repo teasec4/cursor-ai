@@ -1,12 +1,37 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Bindable var settings: AppSettings
+    @Bindable var viewModel: SettingsViewModel
     @State private var isShowingAdvanced = false
-    @State private var isAccessibilityTrusted = AccessibilityPermissionService.isTrusted
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                correctionSection
+
+                Divider()
+
+                modelsSection
+
+                Divider()
+
+                accessibilitySection
+
+                Divider()
+
+                advancedSection
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(width: 560, height: 640)
+        .onAppear {
+            viewModel.onAppear()
+        }
+    }
+
+    private var correctionSection: some View {
+        VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Correction")
                     .font(.title2.weight(.semibold))
@@ -19,14 +44,14 @@ struct SettingsView: View {
                 Text("Character")
                     .font(.headline)
 
-                Picker("Character", selection: $settings.correctionPersonality) {
+                Picker("Character", selection: personalityBinding) {
                     ForEach(CorrectionPersonality.allCases) { personality in
                         Text(personality.title).tag(personality)
                     }
                 }
                 .pickerStyle(.segmented)
 
-                Text(settings.correctionPersonality.subtitle)
+                Text(viewModel.settings.correctionPersonality.subtitle)
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -35,43 +60,200 @@ struct SettingsView: View {
                 Text("Correction level")
                     .font(.headline)
 
-                Picker("Correction level", selection: $settings.correctionStrength) {
+                Picker("Correction level", selection: strengthBinding) {
                     ForEach(CorrectionStrength.allCases) { strength in
                         Text(strength.title).tag(strength)
                     }
                 }
                 .pickerStyle(.segmented)
 
-                Text(settings.correctionStrength.subtitle)
+                Text(viewModel.settings.correctionStrength.subtitle)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var modelsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("AI Models")
+                    .font(.headline)
+
+                Spacer()
+
+                Button {
+                    viewModel.createNewModelDraft()
+                } label: {
+                    Label("New", systemImage: "plus")
+                }
+
+                Button {
+                    viewModel.deleteCurrentModel()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                .disabled(viewModel.isEditingNewModel && !viewModel.hasUnsavedChanges)
+            }
+
+            if viewModel.models.isEmpty && viewModel.isEditingNewModel && !viewModel.hasUnsavedChanges {
+                Text("Add an OpenAI-compatible model before using correction.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
-            Divider()
+            if !viewModel.models.isEmpty {
+                Picker("Selected model", selection: selectedModelIDBinding) {
+                    if viewModel.isEditingNewModel {
+                        Text("New draft").tag("")
+                    }
 
-            accessibilitySection
+                    ForEach(viewModel.models) { model in
+                        Text(model.name).tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
 
-            Divider()
+            if viewModel.isEditingModelDetails {
+                modelEditor
+                editorActions
+            } else if !viewModel.isEditingNewModel {
+                modelSummary
+            }
 
-            advancedSection
-
-            Spacer(minLength: 0)
+            statusMessage
         }
-        .padding(20)
-        .frame(width: 520, height: 600)
-        .onAppear {
-            refreshAccessibilityStatus()
+    }
+
+    private var modelSummary: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LabeledContent("Endpoint", value: viewModel.draftEndpoint)
+            LabeledContent("Model", value: viewModel.draftModelName)
+
+            LabeledContent {
+                Label(
+                    viewModel.selectedModelHasAPIKey ? "Saved in Keychain" : "Missing",
+                    systemImage: viewModel.selectedModelHasAPIKey ? "checkmark.circle" : "exclamationmark.triangle"
+                )
+                .foregroundStyle(viewModel.selectedModelHasAPIKey ? .green : .orange)
+            } label: {
+                Text("API key")
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    viewModel.beginEditingModel()
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+
+                Spacer()
+            }
         }
+        .font(.callout)
+        .padding(12)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var editorActions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Button {
+                    viewModel.saveModel()
+                } label: {
+                    Label(viewModel.saveButtonTitle, systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!viewModel.canSaveModel)
+
+                Button("Cancel") {
+                    viewModel.cancelEditingModel()
+                }
+
+                if viewModel.hasUnsavedChanges {
+                    Label("Unsaved changes", systemImage: "circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+        }
+    }
+
+    private var modelEditor: some View {
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+            GridRow {
+                Text("Name")
+                    .foregroundStyle(.secondary)
+                TextField("Personal OpenAI", text: modelNameBinding)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: .infinity)
+            }
+
+            GridRow {
+                Text("Endpoint")
+                    .foregroundStyle(.secondary)
+                TextField("https://api.openai.com/v1/chat/completions", text: endpointBinding)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: .infinity)
+            }
+
+            GridRow {
+                Text("Model")
+                    .foregroundStyle(.secondary)
+                TextField("gpt-4.1-mini", text: apiModelNameBinding)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: .infinity)
+            }
+
+            GridRow {
+                Text("API key")
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    SecureField(apiKeyPlaceholder, text: apiKeyBinding)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity)
+
+                    Text(viewModel.apiKeyHelpText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .font(.callout)
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var statusMessage: some View {
+        if let message = viewModel.lastMessage {
+            Label(
+                message,
+                systemImage: viewModel.isShowingError ? "exclamationmark.triangle" : "checkmark.circle"
+            )
+            .font(.callout)
+            .foregroundStyle(viewModel.isShowingError ? .orange : .green)
+        }
+    }
+
+    private var apiKeyPlaceholder: String {
+        if viewModel.isEditingNewModel {
+            return "Paste API key"
+        }
+
+        return viewModel.selectedModelHasAPIKey ? "Leave empty to keep saved key" : "Paste API key"
     }
 
     private var accessibilitySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label(
-                    isAccessibilityTrusted ? "Accessibility enabled" : "Accessibility needed",
-                    systemImage: isAccessibilityTrusted ? "checkmark.circle" : "exclamationmark.triangle"
+                    viewModel.isAccessibilityTrusted ? "Accessibility enabled" : "Accessibility needed",
+                    systemImage: viewModel.isAccessibilityTrusted ? "checkmark.circle" : "exclamationmark.triangle"
                 )
-                .foregroundStyle(isAccessibilityTrusted ? .green : .orange)
+                .foregroundStyle(viewModel.isAccessibilityTrusted ? .green : .orange)
 
                 Spacer()
             }
@@ -82,14 +264,13 @@ struct SettingsView: View {
 
             HStack(spacing: 10) {
                 Button {
-                    AccessibilityPermissionService.requestPermission()
-                    refreshAccessibilityStatus()
+                    viewModel.requestAccessibilityPermission()
                 } label: {
                     Label("Request", systemImage: "hand.raised")
                 }
 
                 Button {
-                    AccessibilityPermissionService.openSystemSettings()
+                    viewModel.openAccessibilitySettings()
                 } label: {
                     Label("Open Settings", systemImage: "gearshape")
                 }
@@ -100,7 +281,7 @@ struct SettingsView: View {
     private var advancedSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             Button {
-                withAnimation(.snappy(duration: 0.18)) {
+                withAnimation(.easeInOut(duration: 0.12)) {
                     isShowingAdvanced.toggle()
                 }
             } label: {
@@ -114,100 +295,75 @@ struct SettingsView: View {
                         .rotationEffect(.degrees(isShowingAdvanced ? 90 : 0))
                         .foregroundStyle(.secondary)
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             if isShowingAdvanced {
-                VStack(alignment: .leading, spacing: 16) {
-                    providerSettings
-
-                    Divider()
-
-                    Stepper("Auto-hide: \(Int(settings.overlayAutoHideDelay))s", value: $settings.overlayAutoHideDelay, in: 3...30, step: 1)
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                Stepper(
+                    "Auto-hide: \(Int(viewModel.settings.overlayAutoHideDelay))s",
+                    value: overlayDelayBinding,
+                    in: 3...30,
+                    step: 1
+                )
+                .transition(.opacity)
             }
         }
     }
 
-    private var providerSettings: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("AI Provider")
-                    .font(.headline)
-
-                Spacer()
-
-                Button {
-                    settings.addCustomProvider()
-                } label: {
-                    Label("Add", systemImage: "plus")
-                }
-
-                Button {
-                    settings.removeSelectedCustomProvider()
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .disabled(settings.selectedProvider.isBuiltIn)
-                .help("Remove custom provider")
-            }
-
-            Picker("Provider", selection: $settings.selectedProviderID) {
-                ForEach(settings.providers) { provider in
-                    Text(provider.name).tag(provider.id)
-                }
-            }
-
-            TextField("Name", text: providerNameBinding)
-                .disabled(settings.selectedProvider.isBuiltIn)
-
-            TextField("Endpoint", text: endpointBinding)
-
-            TextField("Model", text: providerModelBinding)
-
-            Text("Providers must use an OpenAI-compatible chat completions API.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var providerNameBinding: Binding<String> {
+    private var personalityBinding: Binding<CorrectionPersonality> {
         Binding(
-            get: { settings.selectedProvider.name },
-            set: { value in
-                settings.updateSelectedProvider { provider in
-                    provider.name = value
-                }
-            }
+            get: { viewModel.settings.correctionPersonality },
+            set: { viewModel.settings.correctionPersonality = $0 }
+        )
+    }
+
+    private var strengthBinding: Binding<CorrectionStrength> {
+        Binding(
+            get: { viewModel.settings.correctionStrength },
+            set: { viewModel.settings.correctionStrength = $0 }
+        )
+    }
+
+    private var overlayDelayBinding: Binding<TimeInterval> {
+        Binding(
+            get: { viewModel.settings.overlayAutoHideDelay },
+            set: { viewModel.settings.overlayAutoHideDelay = $0 }
+        )
+    }
+
+    private var selectedModelIDBinding: Binding<String> {
+        Binding(
+            get: { viewModel.selectedModelID },
+            set: { viewModel.selectModel(id: $0) }
+        )
+    }
+
+    private var modelNameBinding: Binding<String> {
+        Binding(
+            get: { viewModel.draftName },
+            set: { viewModel.updateDraftName($0) }
         )
     }
 
     private var endpointBinding: Binding<String> {
         Binding(
-            get: { settings.selectedProvider.endpoint.absoluteString },
-            set: { value in
-                if let url = URL(string: value) {
-                    settings.updateSelectedProvider { provider in
-                        provider.endpoint = url
-                    }
-                }
-            }
+            get: { viewModel.draftEndpoint },
+            set: { viewModel.updateDraftEndpoint($0) }
         )
     }
 
-    private var providerModelBinding: Binding<String> {
+    private var apiModelNameBinding: Binding<String> {
         Binding(
-            get: { settings.selectedProvider.model },
-            set: { value in
-                settings.updateSelectedProvider { provider in
-                    provider.model = value
-                }
-            }
+            get: { viewModel.draftModelName },
+            set: { viewModel.updateDraftModelName($0) }
         )
     }
 
-    private func refreshAccessibilityStatus() {
-        isAccessibilityTrusted = AccessibilityPermissionService.isTrusted
+    private var apiKeyBinding: Binding<String> {
+        Binding(
+            get: { viewModel.draftAPIKey },
+            set: { viewModel.updateDraftAPIKey($0) }
+        )
     }
 }

@@ -4,6 +4,8 @@ enum AppError: LocalizedError, Equatable {
     case clipboardIsEmpty
     case selectedTextIsEmpty
     case accessibilityPermissionMissing
+    case aiModelMissing
+    case invalidModelConfiguration
     case apiKeyMissing
     case invalidResponse
     case requestFailed(String)
@@ -17,10 +19,14 @@ enum AppError: LocalizedError, Equatable {
             "Select text first, then press the shortcut."
         case .accessibilityPermissionMissing:
             "Allow Cursor Assistant in System Settings > Privacy & Security > Accessibility."
+        case .aiModelMissing:
+            "Add and select an AI model in Settings first."
+        case .invalidModelConfiguration:
+            "Check the selected model endpoint in Settings."
         case .apiKeyMissing:
-            "Set DEEPSEEK_API_KEY before using grammar correction."
+            "Add an API key for the selected model in Settings."
         case .invalidResponse:
-            "DeepSeek returned an unexpected response."
+            "The AI provider returned an unexpected response."
         case let .requestFailed(message):
             message
         case .unsupportedForMVP:

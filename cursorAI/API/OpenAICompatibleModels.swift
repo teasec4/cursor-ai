@@ -1,25 +1,25 @@
 import Foundation
 
-struct DeepSeekMessage: Codable {
+struct ChatMessage: Codable {
     let role: String
     let content: String
 }
 
-struct DeepSeekChatRequest: Codable {
+struct ChatCompletionRequest: Codable {
     let model: String
-    let messages: [DeepSeekMessage]
+    let messages: [ChatMessage]
     let temperature: Double
 }
 
-struct DeepSeekChatResponse: Codable {
+struct ChatCompletionResponse: Codable {
     struct Choice: Codable {
-        let message: DeepSeekMessage
+        let message: ChatMessage
     }
 
     let choices: [Choice]
 }
 
-struct DeepSeekErrorResponse: Codable {
+struct ChatCompletionErrorResponse: Codable {
     struct APIError: Codable {
         let message: String
     }

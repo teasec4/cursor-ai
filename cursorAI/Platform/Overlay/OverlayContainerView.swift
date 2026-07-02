@@ -7,10 +7,6 @@ struct OverlayContainerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Cursor Assistant")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-
                 Spacer()
 
                 Button(action: onClose) {

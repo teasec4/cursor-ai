@@ -1,10 +1,10 @@
 import Foundation
 
-protocol DeepSeekClientProtocol {
+protocol AITextCorrectionClientProtocol {
     func correctGrammar(text: String) async throws -> GrammarCorrectionResult
 }
 
-struct DeepSeekClient: DeepSeekClientProtocol {
+struct OpenAICompatibleClient: AITextCorrectionClientProtocol {
     private let settings: AppSettings
     private let apiKeyStore: APIKeyStoring
     private let session: URLSession
@@ -22,17 +22,23 @@ struct DeepSeekClient: DeepSeekClientProtocol {
     }
 
     func correctGrammar(text: String) async throws -> GrammarCorrectionResult {
-        guard let apiKey = try apiKeyStore.loadAPIKey() else {
+        guard let model = settings.selectedAIModel else {
+            throw AppError.aiModelMissing
+        }
+
+        guard let endpoint = model.endpointURL else {
+            throw AppError.invalidModelConfiguration
+        }
+
+        guard let apiKey = try apiKeyStore.loadAPIKey(for: model.id) else {
             throw AppError.apiKeyMissing
         }
 
-        let provider = settings.selectedProvider
-
-        var request = URLRequest(url: provider.endpoint)
+        var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try encoder.encode(chatRequest(for: text, model: provider.model))
+        request.httpBody = try encoder.encode(chatRequest(for: text, modelName: model.modelName))
 
         let (data, response) = try await session.data(for: request)
 
@@ -41,11 +47,11 @@ struct DeepSeekClient: DeepSeekClientProtocol {
         }
 
         guard 200..<300 ~= httpResponse.statusCode else {
-            let message = decodeAPIError(from: data) ?? "DeepSeek request failed with status \(httpResponse.statusCode)."
+            let message = decodeAPIError(from: data) ?? "AI request failed with status \(httpResponse.statusCode)."
             throw AppError.requestFailed(message)
         }
 
-        let chatResponse = try decoder.decode(DeepSeekChatResponse.self, from: data)
+        let chatResponse = try decoder.decode(ChatCompletionResponse.self, from: data)
 
         guard let content = chatResponse.choices.first?.message.content else {
             throw AppError.invalidResponse
@@ -58,18 +64,12 @@ struct DeepSeekClient: DeepSeekClientProtocol {
         )
     }
 
-    private func chatRequest(for text: String, model: String) -> DeepSeekChatRequest {
-        DeepSeekChatRequest(
-            model: model,
+    private func chatRequest(for text: String, modelName: String) -> ChatCompletionRequest {
+        ChatCompletionRequest(
+            model: modelName,
             messages: [
-                DeepSeekMessage(
-                    role: "system",
-                    content: settings.systemPrompt
-                ),
-                DeepSeekMessage(
-                    role: "user",
-                    content: text
-                )
+                ChatMessage(role: "system", content: settings.systemPrompt),
+                ChatMessage(role: "user", content: text)
             ],
             temperature: 0.2
         )
@@ -89,11 +89,11 @@ struct DeepSeekClient: DeepSeekClientProtocol {
     }
 
     private func decodeAPIError(from data: Data) -> String? {
-        try? decoder.decode(DeepSeekErrorResponse.self, from: data).error.message
+        try? decoder.decode(ChatCompletionErrorResponse.self, from: data).error.message
     }
 }
 
-struct PreviewDeepSeekClient: DeepSeekClientProtocol {
+struct PreviewAITextCorrectionClient: AITextCorrectionClientProtocol {
     func correctGrammar(text: String) async throws -> GrammarCorrectionResult {
         GrammarCorrectionResult(
             originalText: text,
